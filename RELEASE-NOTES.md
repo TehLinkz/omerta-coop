@@ -8,6 +8,13 @@ Selecting Radmin in the launcher could leave the helper using its saved LAN addr
 - Saving a changed host network restarts an already-running helper and updates its firewall rule.
 - A host-side test is labelled as a local check; your friend must test from their PC to confirm reachability.
 
+## WASD camera correction
+
+- Changed WASD movement to use the same world-coordinate camera function as the game's own movement code, addressing reports of jumping to the map boundary.
+- Corrected reversed A/D movement and calibrated zoom-based speed scaling against measured city-view arrow-key movement.
+- Added checks for movement distance, Shift speed, diagonal movement, zoom scaling and frame-delay limits.
+- This correction requires **Install / update** with Omerta closed. Direction and teleport fixes were confirmed in-game. Final speed calibration matches the measured city zoom; other zoom levels and combat still need comparison.
+
 ## Firewall setup
 
 The launcher already includes automatic host firewall setup. **Install / update** and **Start host** configure it when starting the helper; accept the Windows administrator prompt if shown. The rule permits inbound TCP port **50669** for the bundled helper on the selected interface and network range. Changing the saved host network updates the rule when the helper starts. Joining players normally do not need an inbound rule.

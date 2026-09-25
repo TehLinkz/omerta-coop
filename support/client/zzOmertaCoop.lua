@@ -282,11 +282,18 @@ function OnMsg.ClassesBuilt()
               local direction = (look - eye):SetZ(0)
               if direction:Len2D() > 0 then
                 direction = SetLen(direction, 4096)
-                direction = direction * forward + point(direction:y(), -direction:x(), 0) * right
+                direction = direction * forward + point(-direction:y(), direction:x(), 0) * right
                 local speed = terminal.IsKeyPressed(const.vkShift) and hr.RTSCamera.MoveSpeedFast or hr.RTSCamera.MoveSpeedNormal
-                local distance = MulDivRound(speed * terrain.GameUnitsInMeter(), elapsed, 1000)
+                -- Calibrated against native arrows: city zoom 8000 and speed 30
+                -- produce about 135000 world units/sec, not 240000.
+                -- Blend base speed and zoom scaling; preserve base speed at 1000.
+                local zoom = cameraRTS.GetZoom()
+                local world_speed = MulDivRound(speed * terrain.GameUnitsInMeter(), zoom + 1000, 2000)
+                local distance = MulDivRound(world_speed, elapsed, 1000)
                 local target = cameraRTS.ClampLookat(look + SetLen(direction, distance)):SetZ(look:z())
-                cameraRTS.SetCameraPrecise(eye + target - look, target, 0)
+                -- Match the game's ViewObjectRTS/DistrictGangStatus coordinate API.
+                -- GetPosLookAt/ClampLookat return ordinary world-space points.
+                cameraRTS.SetCamera(eye + target - look, target, 0)
               end
             end
           end
