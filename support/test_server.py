@@ -4,7 +4,7 @@ import struct
 import tempfile
 import unittest
 
-from server import Server
+from server import Server, MISSIONS, BASE_MISSIONS
 from wire import decode, encode, rpc_packet, unpack_rpc
 
 TOKEN = 'test-token-only-not-for-deployment-123'
@@ -65,11 +65,12 @@ class RelayTests(unittest.IsolatedAsyncioTestCase):
         self.port = self.listener.sockets[0].getsockname()[1]
         self.clients = []
 
-    async def client(self, profile, name=b'Player', token=TOKEN):
+    async def client(self, profile, name=b'Player', token=TOKEN, missions=None):
         reader, writer = await asyncio.open_connection('127.0.0.1', self.port)
         c = Client(reader, writer)
         self.clients.append(c)
-        result = await c.call('rpcCoopHello', token, profile, name, 3)
+        args = [] if missions is None else [{m:True for m in missions}]
+        result = await c.call('rpcCoopHello', token, profile, name, 3, 2, *args)
         return c, result
 
     async def asyncTearDown(self):
@@ -130,6 +131,73 @@ class RelayTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await c2.event('rpcCoopVictoryConfirmed'), [True, {b'money': 250}])
         self.assertEqual(await c1.call('rpcLeaveGame'), [False])
         self.assertEqual(await c2.event('rpcDropped'), [1, True])
+
+    async def test_host_difficulty_is_snapshotted_for_both_players(self):
+        import json
+        settings = Path(self.temp.name) / 'settings.json'
+        settings.write_text(json.dumps({'difficulty':'insane'}))
+        self.instance.settings_path = settings
+        c1, r1 = await self.client('profile-0001')
+        c2, r2 = await self.client('profile-0002')
+        await c1.call('rpcStartMatch', b'Coop_BankHeist', True)
+        await c2.call('rpcStartMatch', b'Coop_BankHeist', True)
+        self.assertEqual(await c1.event('rpcCoopRules'), [2,b'insane'])
+        self.assertEqual(await c2.event('rpcCoopRules'), [2,b'insane'])
+        self.assertEqual(self.instance.peers[r1[1]].match.difficulty,'insane')
+        settings.write_text(json.dumps({'difficulty':'easy'}))
+        self.assertEqual(self.instance.peers[r1[1]].match.difficulty,'insane')
+        self.assertEqual(await c2.call('rpcCoopRules',2,'easy'),[b'unsupported'])
+        self.assertEqual(self.instance.peers[r1[1]].match.difficulty,'insane')
+
+    async def test_older_patch_is_rejected_before_login(self):
+        reader,writer=await asyncio.open_connection('127.0.0.1',self.port)
+        c=Client(reader,writer);self.clients.append(c)
+        result=await c.call('rpcCoopHello',TOKEN,'profile-0001','Old client',3)
+        self.assertIn(b'Update both PCs',result[0])
+        self.assertEqual(len(self.instance.peers),0)
+
+    async def test_expansion_quickmatch_join_and_relay(self):
+        c1,r1=await self.client('profile-0001',missions=MISSIONS)
+        c2,r2=await self.client('profile-0002',missions=MISSIONS)
+        self.assertIn(b'Coop_Fire',(await c1.call('rpcCountMatch'))[1])
+        self.assertEqual(await c1.call('rpcStartMatch',b'Coop_Fire',True),[False])
+        self.assertEqual(await c2.call('rpcStartMatch',b'Coop_Fire',True),[False])
+        a=await c1.event('rpcChallengeAccepted');b=await c2.event('rpcChallengeAccepted')
+        self.assertEqual(a[1],b'Coop_Fire');self.assertEqual(a[:3],b[:3])
+        self.assertEqual(await c1.call('rpcJoinGame','Gangs',a[0]),[False,1])
+        self.assertEqual(await c2.call('rpcJoinGame','Gangs',a[0]),[False,2])
+        await c1.send('rpcSyncEvent',b'FireAction',b'opaque-native-payload')
+        self.assertEqual(await c2.event('rpcEvent'),[b'FireAction',b'opaque-native-payload'])
+
+    async def test_expansion_requires_both_clients_and_legacy_is_base_only(self):
+        c1,r1=await self.client('profile-0001',missions=MISSIONS)
+        c2,r2=await self.client('profile-0002')
+        self.assertEqual(await c2.call('rpcStartMatch',b'Coop_Fire',True),[b'map missing'])
+        self.assertEqual(await c1.call('rpcCoopUpdate',{r2[1]:b'Coop_Fire'},{}),[b'map missing'])
+        self.assertIsNone(self.instance.peers[r1[1]].match)
+        self.assertNotIn(b'Coop_Fire',(await c2.call('rpcCountMatch'))[1])
+
+    async def test_random_matches_selected_expansion_when_both_have_it(self):
+        c1,r1=await self.client('profile-0001',missions=MISSIONS)
+        c2,r2=await self.client('profile-0002',missions=MISSIONS)
+        await c1.call('rpcStartMatch',b'coop_random',True)
+        await c2.call('rpcStartMatch',b'Coop_Fire',True)
+        self.assertEqual((await c1.event('rpcChallengeAccepted'))[1],b'Coop_Fire')
+
+    async def test_random_uses_only_common_missions(self):
+        c1,r1=await self.client('profile-0001',missions=MISSIONS)
+        c2,r2=await self.client('profile-0002',missions=BASE_MISSIONS)
+        await c1.call('rpcStartMatch',b'coop_random',True)
+        await c2.call('rpcStartMatch',b'coop_random',True)
+        self.assertIn((await c1.event('rpcChallengeAccepted'))[1],BASE_MISSIONS)
+
+    async def test_expansion_invitation_requires_acceptance(self):
+        c1,r1=await self.client('profile-0001',missions=MISSIONS)
+        c2,r2=await self.client('profile-0002',missions=MISSIONS)
+        await c1.call('rpcCoopUpdate',{r2[1]:b'Coop_Fire'},{})
+        self.assertIsNone(self.instance.peers[r1[1]].match)
+        await c2.call('rpcCoopUpdate',{r1[1]:b'Coop_Fire'},{})
+        self.assertEqual((await c1.event('rpcChallengeAccepted'))[1],b'Coop_Fire')
 
     async def test_challenge_requires_acceptance(self):
         c1, r1 = await self.client('profile-0001')

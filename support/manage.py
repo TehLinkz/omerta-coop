@@ -17,7 +17,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parent
 EXE = ROOT / 'runtime' / 'OmertaCoopServer.exe'
 LOCAL = ROOT / 'local-settings.json'
-DEFAULTS = {'maxed': '1', 'turn_seconds': '0', 'wasd': '1'}
+DEFAULTS = {'maxed': '1', 'turn_seconds': '0', 'wasd': '1', 'difficulty': 'normal'}
 
 def read_json(path, default=None):
     return json.loads(path.read_text(encoding='utf-8-sig')) if path.exists() else (default or {})
@@ -120,7 +120,9 @@ def configure_client(game, host, token, name, options=None):
         if key in DEFAULTS:
             if key == 'turn_seconds' and not 0 <= int(value) <= 3600:
                 raise ValueError('Timer must be 0-3600 seconds')
-            if key != 'turn_seconds' and str(value) not in ('0', '1'):
+            if key == 'difficulty' and value not in ('easy','normal','hard','insane'):
+                raise ValueError('Invalid co-op difficulty')
+            if key not in ('turn_seconds','difficulty') and str(value) not in ('0', '1'):
                 raise ValueError('Invalid game option')
             data[key] = str(value)
     write_ini(ROOT / 'OmertaCoop.ini', data)
@@ -177,7 +179,7 @@ def host_setup():
     host = choose_adapter()
     current = player_settings(game)
     name = input(f"Player name [{current['name']}]: ").strip() or current['name']
-    server = {'token': ''}
+    server = {'token': '', 'difficulty': current.get('difficulty','normal')}
     write_json(ROOT / 'server-settings.json', server)
     write_json(ROOT / 'host-settings.json', host)
     configure_client(game, '127.0.0.1', server['token'], name)
@@ -210,11 +212,14 @@ def options():
     data = player_settings(game)
     changes = {}
     for key, label in [('turn_seconds', 'Turn seconds (0 = off, 60 = original, 300 = five minutes)'),
+                       ('difficulty', 'Host bot difficulty (easy / normal / hard / insane)'),
                        ('wasd', 'WASD + arrows (1 = on, 0 = original controls)'),
                        ('maxed', 'All unlocked / default level-12 builds (1 = on, 0 = off)')]:
         changes[key] = input(f'{label} [{data[key]}]: ').strip() or data[key]
     configure_client(game, data['host'], data['token'], data['name'], changes)
-    if (ROOT / 'host-settings.json').exists(): export_invite()
+    if (ROOT / 'host-settings.json').exists():
+        write_json(ROOT / 'server-settings.json', {'token':'', 'difficulty':changes.get('difficulty',data.get('difficulty','normal'))})
+        export_invite()
     print('Settings saved. Both clients must use the same timer. Disabling unlocks does not erase saved progress.')
 
 def own_server():

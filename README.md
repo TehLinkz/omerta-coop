@@ -17,6 +17,7 @@ Host on your own PC and invite a friend over LAN, Radmin, or ZeroTier. The C# la
 - Editable player names without changing profile IDs.
 - Available multiplayer characters unlocked with character-specific default perk progression toward level 12.
 - Available weapons unlocked, including unique variants. Installed DLC availability still applies.
+- Host-controlled co-op bot difficulty, synchronized before each match.
 - Adjustable turn timer, including unlimited time.
 - WASD camera controls alongside the original arrow keys.
 - Host save backup and restore.
@@ -68,6 +69,21 @@ Keep the host helper running while playing. A lightweight relay runs on the host
 
 For an initial test, both players can select Quick Match with the same original co-op mission, such as Bank Heist. A successful connection check confirms reachability, not a completed or synchronized match.
 
+## Co-op maps
+
+| Mission | Requirement |
+|---|---|
+| Bank Heist | Base game |
+| Jailbreak | Base game |
+| Aggressive Negotiations | Base game |
+| Escape the Flames | The Japanese Incentive expansion on both PCs |
+
+Version 1.3 includes relay support for the existing expansion mission, **Escape the Flames**. Unavailable expansion missions are disabled in the chooser. Quick Match's **Random Map** now selects from maps available to both players, instead of always selecting Bank Heist. Random invitations choose from the sender's available missions and verify that the recipient has the selected mission.
+
+**Upgrade:** close Omerta on both PCs. Click **Stop host** before extracting the new ZIP over the existing kit folder, preserve existing settings/saves under `support`, and click **Install / update** on each PC. This restarts the host with the updated helper. Existing player IDs and saved gangs are retained.
+
+The updated helper accepts older difficulty-enabled clients for the three base missions. Both clients and the helper must be updated for Escape the Flames. Automated matching, expansion checks and message-relay tests pass; a complete two-PC expansion combat session still needs in-game confirmation. HD textures are separate and are not included in this release.
+
 ## Launcher buttons
 
 | Button | Action |
@@ -76,16 +92,33 @@ For an initial test, both players can select Quick Match with the same original 
 | Save settings | Save the selected name, connection and options for the next game launch. |
 | Play | Launch through Steam with the launcher skip; start the configured host helper if needed. |
 | Play windowed | Launch in a 1920x1080 window. |
-| Test connection | Check whether the configured host TCP port is reachable. |
-| Start host / Stop host | Start or stop this kit's host helper. Stopping disconnects players. |
+| Test connection | Test the displayed IP. Host checks flag an unsaved network and distinguish local success from remote reachability. |
+| Start host / Stop host | Start host saves the displayed Host settings and starts the helper on that interface. Stop host disconnects players. |
 | Back up saves | Create a host backup ZIP under `support`; stop the helper first. |
 | Restore saves | Restore a host backup ZIP; stop the helper first. |
 | Refresh | Rescan game/network information and reload saved settings, replacing unsaved edits. |
 | Browse | Select the game folder manually. |
 
-Close the game before installation or saving client settings. Changing fields alone does not save them: click **Save settings** or **Install / update**.
+Close the game before installation or saving client settings. Changing fields alone does not save them: click **Save settings**, **Install / update**, or **Start host**. Saving a changed host network restarts an already-running helper and updates its firewall rule. Play uses saved settings. A successful host-side connection test does not establish that a friend can connect; test from the joining PC too.
 
 ## Game options
+
+### Bot difficulty
+
+**Both PCs must install the difficulty-enabled patch. Older clients are rejected at login.**
+
+The host selects a preset and clicks **Save settings** (or **Install / update** when upgrading). The helper sends the selected rules to both players before each new match. Guests cannot override them, and changes do not affect an active match.
+
+| Preset | Enemy changes |
+|---|---|
+| Easy | Target level three below original scaling, minimum level 1. |
+| Normal | Original multiplayer scaling. |
+| Hard | Original scaling, plus 1 base Toughness and Guts. |
+| Insane | Original scaling, plus 2 Toughness/Guts and 1 Muscle/Finesse/Cunning/Smarts. |
+
+Stat bonuses cap at 10. These custom co-op presets adjust enemy levels/stats, not AI decision-making. Player characters and allies are not modified. Native perk progression caps at level 12, so harder presets use stat bonuses rather than relying on higher levels alone. In-game balance and synchronization still need a complete two-player combat test.
+
+### Other options
 
 **Turn seconds:** `0` disables the timer, `60` selects the original duration, and `300` gives five minutes. Both players should use the same value.
 

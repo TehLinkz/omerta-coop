@@ -22,6 +22,7 @@ config.cloud_port = settings.port
 local turn_seconds = tonumber(settings.turn_seconds) or 0
 if turn_seconds < 0 or turn_seconds > 3600 then turn_seconds = 0 end
 if config.MPTurnTimer and turn_seconds > 0 then config.MPTurnTimer.time = turn_seconds * 1000 end
+local coop_difficulty = nil
 local maximum = 8388608
 
 local function uint32(n)
@@ -132,10 +133,17 @@ function NetCloudSocket:OnReceive()
         rpcRfcResult=true, rpcChallengeAccepted=true, rpcSyncPlayersData=true,
         rpcStartGame=true, rpcChangeLoadingStatus=true, rpcMissingMission=true,
         rpcEvent=true, rpcDropped=true, rpcDesync=true, rpcSetPause=true,
-        rpcChatMsg=true, rpcChatSysMsg=true, rpcCoopVictoryConfirmed=true
+        rpcChatMsg=true, rpcChatSysMsg=true, rpcCoopVictoryConfirmed=true, rpcCoopRules=true
       }
       if not allowed[name] then error("Unexpected private RPC") end
-      self:CallRpc(unpack(packet, 1, packet.n))
+      if name == "rpcCoopRules" then
+        local difficulty = packet[3]
+        if packet[2] ~= 2 or not ({easy=true,normal=true,hard=true,insane=true})[difficulty] then error("Unsupported host rules") end
+        coop_difficulty = difficulty
+        diagnostic("OMERTA_COOP_DIFFICULTY " .. difficulty)
+      else
+        self:CallRpc(unpack(packet, 1, packet.n))
+      end
     end)
     if not ok then
       diagnostic("OMERTA_COOP_RPC_ERROR " .. tostring(err))
@@ -145,17 +153,32 @@ function NetCloudSocket:OnReceive()
   end
 end
 
+local function available_coop_missions()
+  local available = {}
+  local defs = DataInstances and DataInstances.MPMissionDef
+  if defs then
+    for _, name in ipairs({"Coop_BankHeist","Coop_Prisonbreak","Coop_LargeWarehouseFight","Coop_Fire"}) do
+      local mission = defs[name]
+      if mission and (not mission.dlc or mission.dlc == "" or IsDlcAvailable(mission.dlc)) then
+        available[name] = true
+      end
+    end
+  end
+  return available
+end
+
 function NetCloudSocket:WaitConnect(timeout, host, port, auto_register)
   diagnostic("OMERTA_COOP_CONNECT_BEGIN")
   if #settings.profile < 8 then
     diagnostic("OMERTA_COOP_CONFIG_ERROR: run configure.py for this PC first")
     return "param"
   end
+  coop_difficulty = nil
   self.login_state = "connecting"
   local err = MessageSocket.WaitConnect(self, timeout, settings.host, settings.port)
   diagnostic("OMERTA_COOP_TCP " .. tostring(err or "ok"))
   if err then return err end
-  local hello_err, id = self:Rfc("rpcCoopHello", settings.token, settings.profile, settings.name, NetworkVersion)
+  local hello_err, id = self:Rfc("rpcCoopHello", settings.token, settings.profile, settings.name, NetworkVersion, 2, available_coop_missions())
   if hello_err then self:Disconnect(); return hello_err end
   self.account_id = id
   self.login_state = "logged"
@@ -228,7 +251,9 @@ function NetConnect(...)
   return err
 end
 
+local setup_coop_mission_selection
 function OnMsg.ClassesBuilt()
+  setup_coop_mission_selection()
   diagnostic("OMERTA_COOP_CLASSES_BUILT")
   local function camera_input_active(dialog)
     return settings.wasd == "1" and GetKeyboardFocus() == dialog and not IsCameraLocked()
@@ -312,5 +337,60 @@ if settings.smoke == "1" and settings.host == "127.0.0.1" then
       connection:Disconnect()
       diagnostic("OMERTA_COOP_SMOKE_END")
     end)
+  end
+end
+
+-- The relay supplies one rules snapshot to both clients before the match starts.
+-- Native perk progression caps at level 12, so harder presets also boost base stats.
+local original_spawn_combat_units = SpawnCombatUnits
+function SpawnCombatUnits(def, count, dest, side, team_idx, handle, henchman, pool, aware, level)
+  local mission = g_CurrentMission
+  local enemy = GameState and GameState.multiplayer and mission and type(mission.name) == "string"
+    and string.sub(mission.name, 1, 5) == "Coop_" and not henchman and level
+    and type(side) == "number" and side > 0 and side ~= mission.player_side and side ~= mission.remote_side
+  if enemy and not coop_difficulty then error("Missing synchronized co-op difficulty; update both PCs") end
+  if enemy and coop_difficulty == "easy" then level = Max(1, tonumber(level) - 3) end
+  local units = original_spawn_combat_units(def, count, dest, side, team_idx, handle, henchman, pool, aware, level)
+  if enemy and units and (coop_difficulty == "hard" or coop_difficulty == "insane") then
+    local bonus = coop_difficulty == "insane" and 2 or 1
+    for _, unit in ipairs(units) do
+      unit.base_toughness = Min(10, unit.base_toughness + bonus)
+      unit.base_guts = Min(10, unit.base_guts + bonus)
+      if coop_difficulty == "insane" then
+        for _, stat in ipairs({"base_muscle","base_finesse","base_cunning","base_smarts"}) do
+          unit[stat] = Min(10, unit[stat] + 1)
+        end
+      end
+      unit:Recalc()
+    end
+  end
+  return units
+end
+
+-- Expansion co-op uses the native mission data and fire simulation.
+-- Remove the stock Random Map button's hard-coded three-map selection.
+setup_coop_mission_selection = function()
+  if not MultiplayerChooseMission then return end
+  local original_init = MultiplayerChooseMission.InitControls
+  function MultiplayerChooseMission:InitControls(...)
+    original_init(self, ...)
+    if self.dataset.mode ~= "coop" then return end
+    local available = available_coop_missions()
+    local choices = {}
+    for i, mission in ipairs(self.missions_in_mode) do
+      if available[mission.name] then choices[#choices+1] = mission.name end
+      if mission.name == "Random_Map" then
+        local button = self["idMission" .. i]
+        button.OnLButtonDown = function()
+          if #choices == 0 then return end
+          local name = self.dataset.quick_match and "coop_random" or choices[SyncRand(#choices)+1]
+          if self.dataset.callback then self.dataset.callback(self.parent.parent, name) end
+          self:delete(name)
+        end
+      elseif not available[mission.name] then
+        self["idMission" .. i].OnLButtonDown = function() end
+        self["idMapTitle" .. i]:SetText("Expansion required")
+      end
+    end
   end
 end

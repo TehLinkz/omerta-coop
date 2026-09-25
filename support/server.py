@@ -14,7 +14,8 @@ from wire import MAX_FRAME, rpc_packet, unpack_rpc
 
 LOG = logging.getLogger('omerta')
 RATING = {b'rating_coop': 120000, b'rating_pvsp': 120000}
-MISSIONS = {b'Coop_BankHeist', b'Coop_Prisonbreak', b'Coop_LargeWarehouseFight'}
+BASE_MISSIONS = {b'Coop_BankHeist', b'Coop_Prisonbreak', b'Coop_LargeWarehouseFight'}
+MISSIONS = BASE_MISSIONS | {b'Coop_Fire'}
 
 
 class Peer:
@@ -27,6 +28,7 @@ class Peer:
         self.version = None
         self.match = None
         self.queue = None
+        self.missions = set(BASE_MISSIONS)
         self.challenges = {}
 
     async def send(self, name, *args):
@@ -46,7 +48,8 @@ class Match:
 
 
 class Server:
-    def __init__(self, token, state_dir):
+    def __init__(self, token, state_dir, settings_path=None):
+        self.settings_path = Path(settings_path) if settings_path else None
         self.token = token.encode()
         self.state_dir = Path(state_dir)
         self.state_dir.mkdir(parents=True, exist_ok=True)
@@ -121,21 +124,32 @@ class Server:
     async def pair(self, p1, p2, mission):
         if p1 is p2 or p1.match or p2.match or p1.version != p2.version:
             return False
+        if mission not in p1.missions or mission not in p2.missions:
+            return False
+        rules = json.loads(self.settings_path.read_text()) if self.settings_path else {}
+        difficulty = rules.get('difficulty', 'normal')
+        if difficulty not in ('easy','normal','hard','insane'): raise ValueError('Invalid host difficulty')
         match = Match(self.next_match, [p1, p2], mission)
+        match.difficulty = difficulty
         self.next_match += 1
         for p in match.players:
             p.match, p.queue = match, None
             p.challenges.clear()
         for p in match.players:
+            await p.send('rpcCoopRules', 2, match.difficulty)
             await p.send('rpcChallengeAccepted', match.id, mission, match.seed, RATING)
         LOG.info('Match %s paired: players %s/%s, mission %s', match.id, p1.id, p2.id, mission.decode())
         return True
 
     async def call(self, p, method, a):
         if method == 'rpcCoopHello':
-            if p.id or len(a) != 4:
+            if p.id: return [b'param']
+            if len(a) not in (5,6) or a[4] != 2:
+                return [b'Update both PCs to the difficulty-enabled patch']
+            token, profile, name, version, patch_version = a[:5]
+            available = a[5] if len(a) == 6 else {m: True for m in BASE_MISSIONS}
+            if not isinstance(available, dict) or len(available) > len(MISSIONS) or any(m not in MISSIONS or enabled is not True for m, enabled in available.items()):
                 return [b'param']
-            token, profile, name, version = a
             if not isinstance(token, bytes) or (self.token and not hmac.compare_digest(token, self.token)):
                 return [b'failed']
             if not isinstance(profile, bytes) or not 8 <= len(profile) <= 128:
@@ -147,6 +161,7 @@ class Server:
                 return [b'param']
             p.id, self.next_id = self.next_id, self.next_id + 1
             p.profile, p.name, p.version = profile_hash, name, version
+            p.missions = set(available)
             self.peers[p.id] = p
             LOG.info('Player %s connected, game network version %s', p.id, version)
             return [False, p.id]
@@ -183,11 +198,13 @@ class Server:
                     other.challenges.pop(p.id, None)
                 p.challenges.pop(other_id, None)
             for other_id, mission in challenges.items():
-                if mission not in MISSIONS:
-                    continue
+                if mission not in p.missions:
+                    return [b'map missing']
                 other = self.peers.get(other_id)
                 if not other or other is p:
                     continue
+                if mission not in other.missions:
+                    return [b'map missing']
                 p.challenges[other_id] = mission
                 if other.challenges.get(p.id) == mission:
                     await self.pair(other, p, mission)
@@ -221,17 +238,21 @@ class Server:
             return [False, next((q.id for q in self.peers.values() if a and q.name == a[0]), False)]
         if method == 'rpcStartMatch':
             mission = a[0] if a else None
-            if mission == b'coop_random':
-                mission = b'Coop_BankHeist'
-            if mission not in MISSIONS:
+            if mission != b'coop_random' and mission not in MISSIONS:
                 return [b'param']
+            if mission != b'coop_random' and mission not in p.missions:
+                return [b'map missing']
             if p.match:
                 return [b'failed']
             p.queue = mission
             for other in list(self.peers.values()):
-                if other is not p and other.queue == mission and not other.match:
-                    if await self.pair(other, p, mission):
-                        break
+                if other is p or not other.queue or other.match:
+                    continue
+                choices = p.missions & other.missions
+                if mission != b'coop_random': choices &= {mission}
+                if other.queue != b'coop_random': choices &= {other.queue}
+                if choices and await self.pair(other, p, secrets.choice(sorted(choices))):
+                    break
             return [False]
         if method == 'rpcGetMatchMission':
             return [False, p.queue or False]
@@ -239,7 +260,9 @@ class Server:
             p.queue = None
             return [False]
         if method == 'rpcCountMatch':
-            return [False, {m: sum(q.queue == m for q in self.peers.values()) for m in MISSIONS}]
+            counts = {m: sum(q.queue == m for q in self.peers.values()) for m in p.missions}
+            counts[b'coop_random'] = sum(q.queue == b'coop_random' for q in self.peers.values())
+            return [False, counts]
         if method == 'rpcJoinGame':
             if not p.match or len(a) != 2 or a[0] != b'Gangs' or a[1] != p.match.id:
                 return [b'failed']
@@ -314,7 +337,7 @@ async def main():
     token = settings.get('token', '')
     if not isinstance(token, str) or (token and len(token) < 24):
         raise ValueError('Optional legacy token must be at least 24 characters')
-    instance = Server(token, args.state)
+    instance = Server(token, args.state, args.settings)
     addresses = args.bind or ['127.0.0.1']
     server = await asyncio.start_server(instance.accept, addresses, args.port, limit=MAX_FRAME + 4)
     LOG.info('EXPERIMENTAL relay listening on %s:%s; two-player validation required', ', '.join(addresses), args.port)
