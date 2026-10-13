@@ -1,8 +1,9 @@
 # Experimental launcher bypass. No signed executable is modified.
 [CmdletBinding()]
 param(
-    [string]$GameDirectory = 'D:\SteamLibrary\steamapps\common\Omerta',
+    [Parameter(Mandatory=$true)][string]$GameDirectory,
     [switch]$Windowed,
+    [switch]$KeepKalypso,
     [ValidateRange(800,7680)][int]$Width = 1920,
     [ValidateRange(600,4320)][int]$Height = 1080
 )
@@ -38,14 +39,16 @@ public static class OmertaLauncherExit {
 '@
 }
 $started = Get-Date
+# Steam already considers the bridge an active instance of app 208520.
+# Start the user's installed game directly; Steam remains online for both processes.
+$env:SteamAppId = '208520'
+$env:SteamGameId = '208520'
 if ($Windowed) {
-    $steamRoot = (Get-ItemProperty 'HKCU:\Software\Valve\Steam').SteamPath
-    $steamExe = Join-Path $steamRoot 'steam.exe'
-    if (!(Test-Path -LiteralPath $steamExe)) { throw 'Steam executable not found.' }
-    Start-Process -FilePath $steamExe -ArgumentList @('-applaunch', '208520', '-windowed', '-width', "$Width", '-height', "$Height") -WindowStyle Hidden
+    Start-Process -FilePath $gameExe -WorkingDirectory $gameRoot -ArgumentList @('-windowed', '-width', "$Width", '-height', "$Height") -WindowStyle Normal
 } else {
-    Start-Process 'steam://rungameid/208520'
+    Start-Process -FilePath $gameExe -WorkingDirectory $gameRoot -WindowStyle Normal
 }
+if ($KeepKalypso) { Write-Output 'Game started. Click Start in Kalypso if shown.'; exit 0 }
 $deadline = $started.AddSeconds(90)
 while ((Get-Date) -lt $deadline) {
     $games = @(Get-CimInstance Win32_Process -Filter "Name='OmertaSteam.exe'" |

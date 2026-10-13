@@ -108,6 +108,7 @@ def player_settings(game):
     data.setdefault('name', 'Player')
     for key, value in DEFAULTS.items():
         data.setdefault(key, value)
+    data.setdefault('items', data.get('maxed', '1'))
     data['smoke'] = '0'
     data['port'] = '50669'
     return data
@@ -117,7 +118,7 @@ def configure_client(game, host, token, name, options=None):
     data = player_settings(game)
     data.update(host=host, token=token, name=validate_name(name))
     for key, value in (options or {}).items():
-        if key in DEFAULTS:
+        if key in DEFAULTS or key == 'items':
             if key == 'turn_seconds' and not 0 <= int(value) <= 3600:
                 raise ValueError('Timer must be 0-3600 seconds')
             if key == 'difficulty' and value not in ('easy','normal','hard','insane'):

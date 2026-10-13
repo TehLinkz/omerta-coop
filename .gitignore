@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.log
+*.hpk
+*.ini
+*.ini.*
+support/state/
+support/*-settings.json
+support/steam-local.json
+support/*.pid
+support/*-test.txt
+support/steam-probe.txt
+support/backups/
+support/firewall-*.xml
+support/firewall-*.txt
+*.zip
+!support/runtime/python313.zip

@@ -1,79 +1,118 @@
-OMERTA CO-OP
+OMERTA CO-OP v1.4 - STEAM WITH LAN / VPN FALLBACK
 
-Open OmertaCoop.exe. Keep the support folder beside it.
-No separate Python installation is needed.
+This integrates the existing co-op helper with SteamNetworking under Omerta's
+real app ID (208520). The earlier two-PC probe confirmed Steam relay delivery.
+Steam connection has been reported working by the tester. A full completed
+mission is still not confirmed. LAN/Radmin is available in the fallback tab.
 
-SETUP
-The launcher scans Steam and every library listed by Steam for Omerta.
-If multiple installations are found, choose one from Game folder.
-Browse is available if automatic detection cannot locate the game.
+SETUP ON BOTH PCs
+1. Extract the entire ZIP to a new, permanent folder. Keep support and
+   steam_appid.txt beside OmertaSteamCoop.exe.
+2. Close Omerta and the old Steam connection prototype. Run Steam online on
+   separate accounts that each own Omerta.
+3. Open OmertaSteamCoop.exe. Check the detected game folder and player name.
+4. One player chooses Host; the other chooses Join. The host selects difficulty.
+5. Click Initialize Steam. Exchange the displayed IDs and paste the other
+   player's ID into Friend's Steam ID. These are IDs, not IP addresses.
+6. Click Install / update with Omerta closed.
+7. Both click Connect. This applies the selected role/settings again and starts
+   the host's helper automatically. Wait for "Steam connection ready" on BOTH
+   PCs. Initial relay setup may take 20-60 seconds; the initial timeout is 120.
+8. Click Play on each PC, then open Multiplayer. Start with Quick Match and the
+   same mission, such as Bank Heist. Keep this launcher open for the whole game.
 
-Close Omerta. Choose Host or Join, enter your player name and configure:
-- Host: Home LAN or Radmin / ZeroTier, then your network interface.
-- Join: enter the host player's IP address.
-Click Install / update. Host setup starts the helper and may show a Windows
-administrator prompt to configure its firewall rule. No tokens are needed.
-Both VPN players must already be in the same Radmin / ZeroTier network.
+Radmin/ZeroTier is not required for this transport. To verify independence,
+disconnect it on both PCs while leaving Steam and the internet connected.
+Relay=1 means Steam reports relay use; Relay=0 means a direct Steam-managed
+connection. Both are valid. Relay fallback is enabled, not forced.
 
-PLAY AND OPTIONS
-Play or Play windowed launches through Steam and skips the Kalypso launcher.
-Play windowed defaults to 1920x1080. The host helper starts when needed.
-Save settings applies names, unlocks, timer and WASD settings for the next launch.
-Timer 0 means off; both players should use the same number of seconds.
-Unlocks + level 12 includes available characters, their default perk builds,
-and available weapons. This replaces custom perk choices while enabled.
-WASD works alongside arrows; Alt+W retains Defensive Behavior.
-Changing the player name or network retains the existing profile ID.
-Fresh profiles receive the unlocks when the option is enabled.
 
-HOST SAVES
-Stop host before Back up saves or Restore saves. Backups are saved in support.
-Choose the backup ZIP when restoring. Configure the new host's network afterward.
-Host saves are separate from player IDs, which remain in each game's OmertaCoop.ini.
-Do not copy one player's INI to the other player's PC.
+PATCHES AND OPTIONS TAB
+- Characters: unlock available characters, level 12 and their default perks.
+- Weapons: independently unlock all available weapons. Installed DLC applies.
+- Camera: turn WASD movement on/off; arrow keys remain available. Alt+W retains
+  Defensive Behavior while WASD is enabled.
+- Game launch: enable/disable the Kalypso launcher skip.
+- Round timer: 0 = unlimited, 60 = original, 300 = five minutes, up to 3600.
+  Both players must use the same timer setting.
+- Host bot difficulty: Easy, Normal, Hard or Insane; applied to both players.
+- Apply selected patches: install the selected on/off settings with game closed.
+- Disable optional patches: turn off characters, weapons, WASD and launcher
+  skip, restore the 60-second timer and select Normal. Co-op remains installed.
+- Restore original game: restore the verified original Lua archive, removing
+  the co-op Lua patch. Profiles and host saves remain. HD textures are separate.
 
-SHARING
-Give other players the clean ZIP, not your configured working folder.
-Extract the entire ZIP. Each player needs their own installed Steam game.
-Runtime, settings, logs and saves remain in support. Optional console shortcuts
-are in support/shortcuts. Technical details and licenses: support/README.txt.
+Turning unlocks OFF stops future grants and perk rebuilding; it does not remove
+levels, weapons or other progress already saved. There is no automatic downgrade
+of existing characters. Restore a private pre-unlock host backup if you have one
+and need that exact older progress. Campaign saves are not edited.
 
-Development build: login and connection tests passed; a full two-player match,
-turn timer and camera controls still need real-game confirmation.
+LAN / RADMIN FALLBACK TAB
+Choose Host or Join above the tabs. Host selects Home LAN or Radmin / ZeroTier
+and its interface. Join enters the host IP. Click Apply LAN / VPN setup; it
+installs the same game options with the fallback connection and starts the host
+helper, with Windows administrator approval for its firewall rule when needed.
+Test displayed IP checks that selected address, not a stale saved address.
+A successful test on the host PC is only local; the guest must test from theirs.
+Use Play while the fallback tab is selected. Stop fallback host stops this kit's
+owned helper. Steam Connect stops this kit's fallback host before switching.
+Both players must already belong to the same LAN or VPN. Router port forwarding
+is not configured. Steam remains the default tab; fallback does not require
+initializing the Steam connection API. All modes share this build's host saves.
 
-BOT DIFFICULTY (HOST CONTROLLED)
-Both PCs need at least the difficulty-enabled patch; earlier clients cannot join.
-The host chooses Easy, Normal, Hard or Insane and clicks Save settings.
-The choice is synchronized to both players before each new match; changing it
-never changes an already-started match. The guest's dropdown is disabled.
-- Easy: enemy target level is three below the original scaling, minimum 1.
-- Normal: original multiplayer enemy scaling.
-- Hard: original level scaling, +1 base Toughness and Guts.
-- Insane: original levels, +2 Toughness/Guts, +1 Muscle/Finesse/Cunning/Smarts.
-Base stat bonuses cap at 10. These are custom co-op presets, not the campaign
-selector or changes to AI decision-making. Player characters and allies are unchanged.
-Real-game combat balance and synchronization still need a two-PC match test.
+Stop the active Steam connection and close Omerta before changing patches or
+switching connection modes. Select settings, then apply them; changing a checkbox
+alone does not change the running game.
 
-CO-OP MAPS (v1.3)
-The original maps are Bank Heist, Jailbreak and Aggressive Negotiations.
-Escape the Flames is also supported when both players have the expansion.
-Unavailable expansion missions are disabled. Random Map now chooses from
-the maps available to both players in Quick Match; invitations use the sender's
-available maps and check the recipient before accepting the match.
+WHAT CHANGES
+Install updates Lua.hpk with the current co-op patch. It preserves the original
+archive backup and existing player identity, unlocks, timer and WASD options.
+Both players should still use matching turn-timer settings.
+The game connects locally: Host uses 127.0.0.1:50670; Join uses 127.0.0.1:50671.
+In Steam mode, only the selected peer's packets are accepted and the host
+helper binds loopback. No inbound LAN/VPN rule or router forward is needed
+for Steam mode. Fallback host setup configures its selected interface firewall.
+No original game archives or Steam DLL are included. The installed game's DLL
+is loaded. HD texture archives are not changed.
 
-To upgrade, close the game on both PCs. On the host, click Stop host before
-extracting the new ZIP over the existing kit, then open OmertaCoop.exe and click
-Install / update on both PCs. Keep existing settings and saves in support.
-The updated helper accepts older difficulty-enabled clients for base maps only;
-both clients and the host helper need this update for Escape the Flames.
-Automated matching and relay tests pass; an actual two-PC Escape the Flames
-combat session still needs confirmation. This update contains no HD textures.
+SAVES AND RETURNING TO THE LAN/RADMIN KIT
+The game's pre-Steam INI is backed up once as OmertaCoop.ini.before-steam.
+Host saves live in THIS build's support/state folder. A separate extracted
+build starts with separate host saves; unlocks still apply if enabled.
+To transfer existing gangs, stop both helpers and copy the old kit's support/
+state folder into this build's support/state before playing. Keep a backup.
+Only the host needs these saves. Never give both players the same profile INI.
+To return to LAN/Radmin: close Omerta, click Stop and close this launcher; open
+the old OmertaCoop.exe, choose the desired Host/Join network, and use Install /
+update. That restores the old connection port and settings while retaining ID.
 
-NETWORK SELECTION FIX (v1.3)
-Test connection checks the IP displayed in the launcher. If the selected host
-network is not saved, it tells you to close the game and click Start host.
-Start host applies the displayed settings before starting the helper.
-Saving a changed host network restarts an already-running helper and updates
-its firewall rule. Play still uses saved settings: save changes before playing.
-A successful test on the host PC is only a local check. The joining player must
-test the host IP from their PC; both players must be on the same VPN network.
+IF IT FAILS
+- Wait for both launchers to say ready before opening Multiplayer.
+- Use opposite roles and the correct Steam IDs, and close the old probe.
+- If a bridge restarts or times out, close Omerta and Stop/Connect on both PCs.
+- Stop or closing this window ends the bridge; on Host it also ends this
+  launcher's own helper. Other helpers and game processes are not terminated.
+- A port-in-use error leaves the existing process alone. Stop the other Steam
+  gameplay-test window first; do not run two copies of this build.
+- Logs: support/steam-bridge.log and support/steam-server.log. Report both PCs'
+  results and where play stopped: login, matching, loading or taking turns.
+- Play starts the installed Omerta executable directly while Steam is running.
+  Using Steam's own Play button can report "already running" because the bridge
+  uses the same app ID. Direct launch has been verified on the development PC.
+
+VALIDATION
+The local transport test passed byte-for-byte transfer of 1,048,577 bytes in
+each direction through real loopback TCP sockets with a simulated Steam
+transport, including reconnect, stale-session rejection and role validation.
+The 13 co-op protocol regression tests pass. Setup tests verify role ports,
+profile/options preservation and the pre-Steam INI backup.
+These tests do not prove native Steam gameplay or combat synchronization.
+
+DEVELOPMENT
+Source is in support. Build SteamMain.cs, SteamWindow.cs, SteamTunnel.cs and
+SteamProbe.cs together with the .NET Framework C# compiler, /platform:x86
+/target:winexe and references System.Windows.Forms, System.Drawing,
+System.Web.Extensions. --self-test runs the local tunnel regression test.
+Python is bundled. Steam API interface reference:
+https://partner.steamgames.com/doc/api/isteamnetworking
+This uses the older SteamNetworking005 API and is an unofficial test build.

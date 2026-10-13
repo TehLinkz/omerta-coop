@@ -1,6 +1,6 @@
 -- Experimental, opt-in private connection. Original gameplay serialization stays intact.
 -- Loaded from the user's own rebuilt Lua.hpk; no original game code is distributed.
-local settings = {host = "127.0.0.1", port = 50669, token = "", profile = "", name = "Player", smoke = "0", maxed = "1", turn_seconds = "0", wasd = "1"}
+local settings = {host = "127.0.0.1", port = 50669, token = "", profile = "", name = "Player", smoke = "0", maxed = "1", items = "legacy", turn_seconds = "0", wasd = "1"}
 local install_dir = "" -- OMERTA_INSTALL_DIR
 local function diagnostic(message)
   DebugPrint(message .. "\n")
@@ -207,8 +207,10 @@ end
 local original_load_multiplayer = LoadMultiplayerStorage
 function LoadMultiplayerStorage(...)
   original_load_multiplayer(...)
-  if settings.maxed ~= "1" or not SessionStorage.Multiplayer then return end
-  UnlockAllMembers()
+  if not SessionStorage.Multiplayer then return end
+  local unlock_items = settings.items == "1" or (settings.items == "legacy" and settings.maxed == "1")
+  if settings.maxed ~= "1" and not unlock_items then return end
+  if settings.maxed == "1" then UnlockAllMembers() end
   local gang = SessionStorage.UICity.gang
   local visited = {}
   local function maximize(list)
@@ -232,10 +234,12 @@ function LoadMultiplayerStorage(...)
       end
     end
   end
-  maximize(gang.Unlocked)
-  maximize(gang.Hired)
+  if settings.maxed == "1" then
+    maximize(gang.Unlocked)
+    maximize(gang.Hired)
+  end
   gang.MPUnlockedWeapons = gang.MPUnlockedWeapons or {}
-  local weapons = GetAllWeaponTypes()
+  local weapons = unlock_items and GetAllWeaponTypes() or {}
   for i = 1, #weapons do table_insert_unique(gang.MPUnlockedWeapons, weapons[i]) end
   diagnostic("OMERTA_COOP_MAXED characters=" .. #gang.Unlocked .. " weapons=" .. #gang.MPUnlockedWeapons)
 end
