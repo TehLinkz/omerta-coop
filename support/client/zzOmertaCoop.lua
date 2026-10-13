@@ -1,6 +1,6 @@
 -- Experimental, opt-in private connection. Original gameplay serialization stays intact.
 -- Loaded from the user's own rebuilt Lua.hpk; no original game code is distributed.
-local settings = {host = "127.0.0.1", port = 50669, token = "", profile = "", name = "Player", smoke = "0", maxed = "1", items = "legacy", turn_seconds = "0", wasd = "1"}
+local settings = {host = "127.0.0.1", port = 50669, token = "", profile = "", name = "Player", smoke = "0", maxed = "1", items = "legacy", turn_seconds = "0", wasd = "1", hud_scale = "100", ping = "middle"}
 local install_dir = "" -- OMERTA_INSTALL_DIR
 local function diagnostic(message)
   DebugPrint(message .. "\n")
@@ -133,7 +133,7 @@ function NetCloudSocket:OnReceive()
         rpcRfcResult=true, rpcChallengeAccepted=true, rpcSyncPlayersData=true,
         rpcStartGame=true, rpcChangeLoadingStatus=true, rpcMissingMission=true,
         rpcEvent=true, rpcDropped=true, rpcDesync=true, rpcSetPause=true,
-        rpcChatMsg=true, rpcChatSysMsg=true, rpcCoopVictoryConfirmed=true, rpcCoopRules=true
+        rpcChatMsg=true, rpcChatSysMsg=true, rpcCoopVictoryConfirmed=true, rpcCoopRules=true, rpcCoopMapPing=true
       }
       if not allowed[name] then error("Unexpected private RPC") end
       if name == "rpcCoopRules" then
@@ -178,7 +178,7 @@ function NetCloudSocket:WaitConnect(timeout, host, port, auto_register)
   local err = MessageSocket.WaitConnect(self, timeout, settings.host, settings.port)
   diagnostic("OMERTA_COOP_TCP " .. tostring(err or "ok"))
   if err then return err end
-  local hello_err, id = self:Rfc("rpcCoopHello", settings.token, settings.profile, settings.name, NetworkVersion, 2, available_coop_missions())
+  local hello_err, id = self:Rfc("rpcCoopHello", settings.token, settings.profile, settings.name, NetworkVersion, 2, available_coop_missions(), {map_ping_v1=true})
   if hello_err then self:Disconnect(); return hello_err end
   self.account_id = id
   self.login_state = "logged"
@@ -256,8 +256,10 @@ function NetConnect(...)
 end
 
 local setup_coop_mission_selection
+local setup_coop_hud_ping
 function OnMsg.ClassesBuilt()
   setup_coop_mission_selection()
+  setup_coop_hud_ping()
   diagnostic("OMERTA_COOP_CLASSES_BUILT")
   local function camera_input_active(dialog)
     return settings.wasd == "1" and GetKeyboardFocus() == dialog and not IsCameraLocked()
@@ -404,4 +406,125 @@ setup_coop_mission_selection = function()
       end
     end
   end
+end
+-- Local HUD scaling and UI-only co-op attention markers. No simulated objects or
+-- deterministic game events are created, so camera/UI preferences may differ.
+local hud_scale = tonumber(settings.hud_scale) or 100
+if not ({[100]=true,[150]=true,[200]=true,[300]=true})[hud_scale] then hud_scale = 100 end
+local ping_binding = settings.ping
+if not ({off=true,middle=true,alt_left=true})[ping_binding] then ping_binding = "off" end
+
+local function valid_ping_coordinate(v, low, high)
+  return type(v) == "number" and v == v and v % 1 == 0 and v >= low and v <= high
+end
+
+function NetCloudSocket:rpcCoopMapPing(game, sender, x, y, z)
+  if ping_binding == "off" or game ~= netInGame or not GameState.multiplayer then return end
+  if sender ~= 1 and sender ~= 2 then return end
+  if not valid_ping_coordinate(x, 0, 10000000) or not valid_ping_coordinate(y, 0, 10000000)
+    or not valid_ping_coordinate(z, -1000000, 1000000) then return end
+  local dialog = GetDialog("CombatInterface")
+  if dialog and not dialog.destroying and dialog.OmertaShowPing then
+    local ok, err = pcall(dialog.OmertaShowPing, dialog, sender, point(x, y, z))
+    if not ok then diagnostic("OMERTA_COOP_PING_UI_ERROR " .. tostring(err)) end
+  end
+end
+
+setup_coop_hud_ping = function()
+  if InGameInterface then
+    local original_scale = InGameInterface.SetWindowScale
+    function InGameInterface:SetWindowScale(scale)
+      -- Native layout recalculates anchored boxes and hit regions together.
+      -- Apply to the gameplay root only; explicit menu scales stay unchanged.
+      return original_scale(self, MulDivRound(scale, hud_scale, 100))
+    end
+  end
+  if not CombatInterface then return end
+  function CombatInterface:OmertaShowPing(sender, world)
+    self.omerta_pings = self.omerta_pings or {}
+    local previous = self.omerta_pings[sender]
+    if previous and not previous.destroying then previous:delete() end
+    local marker = Window:new(self)
+    self.omerta_pings[sender] = marker
+    marker:SetClickTransparent(true)
+    marker:SetZOrder(1000)
+    -- Keep an explicit scale: changing the HUD must not move world markers.
+    marker:SetWindowScale(100)
+    local scale = GetUIScale()
+    local width, height = MulDivRound(144, scale, 100), MulDivRound(72, scale, 100)
+    marker:SetSize(point(width, height))
+    marker:SetPos(point(0, 0))
+    marker:RecalcBoxOrg()
+    local color = sender == netUniqueId and RGBA(255, 210, 55, 255) or RGBA(80, 230, 255, 255)
+    local symbol = StaticText:new(marker)
+    symbol:SetClickTransparent(true)
+    symbol:SetPos(point(0, 0)); symbol:SetSize(point(width, height * 2 / 3))
+    symbol:SetFontStyle("Menu20Bold", scale * 2)
+    symbol:SetTextPrefix("<center><vcenter>")
+    symbol:SetTextColor(color); symbol:SetText("+")
+    local label = StaticText:new(marker)
+    label:SetClickTransparent(true)
+    label:SetPos(point(0, height * 2 / 3)); label:SetSize(point(width, height / 3))
+    label:SetFontStyle("Menu18", scale)
+    label:SetTextPrefix("<center><vcenter>")
+    label:SetBackgroundColor(RGBA(0, 0, 0, 170)); label:SetTextColor(color)
+    local own = sender == netUniqueId
+    local expires, match = RealTime() + 5000, netInGame
+    marker:CreateThread("omerta_ping_follow", function()
+      while not self.destroying and netInGame == match and GameState.multiplayer and RealTime() < expires do
+        local in_front, screen = GameToScreen(world)
+        if screen then
+          local x, y = screen:xy()
+          local sx, sy = UIL.GetScreenSize():xy()
+          local edge = not in_front or x < width / 2 or x > sx - width / 2 or y < height / 3 or y > sy - height
+          local left, top = Clamp(x - width / 2, 4, sx - width - 4), Clamp(y - height / 3, 4, sy - height - 4)
+          marker:SetPos(point(left, top))
+          label:SetText(edge and "PING (off screen)" or (own and "YOUR PING" or "PARTNER PING"))
+          marker:SetVisible(true)
+        else
+          marker:SetVisible(false)
+        end
+        Sleep(33)
+      end
+      if self.omerta_pings[sender] == marker then self.omerta_pings[sender] = nil end
+      marker:delete()
+    end)
+  end
+  local function can_ping(self, pt)
+    return ping_binding ~= "off" and GameState.multiplayer and netInGame and netCloudSocket
+      and not UIStyle.gamepad and GetKeyboardFocus() == self and not IsCameraLocked()
+      and self.desktop and self.desktop.last_mouse_target == self
+      and not terminal.IsKeyPressed(const.vkControl)
+  end
+  local function send_ping(self)
+    local now = RealTime()
+    if self.omerta_last_ping and now - self.omerta_last_ping < 750 then return end
+    local pos = GetTerrainCursor()
+    if not pos then return end
+    local x, y, z = pos:x(), pos:y(), GetWalkableZ(pos)
+    if not valid_ping_coordinate(x, 0, 10000000) or not valid_ping_coordinate(y, 0, 10000000)
+      or not valid_ping_coordinate(z, -1000000, 1000000) then return end
+    self.omerta_last_ping = now
+    netCloudSocket:Rpc("rpcCoopMapPing", netInGame, x, y, z)
+  end
+  local old_middle = CombatInterface.OnMButtonDown
+  local old_left = CombatInterface.OnLButtonDown
+  local old_double = CombatInterface.OnLButtonDoubleClick
+  function CombatInterface:OnMButtonDown(pt)
+    if ping_binding == "middle" and can_ping(self, pt) then send_ping(self); return "break" end
+    if old_middle then return old_middle(self, pt) end
+  end
+  function CombatInterface:OnLButtonDown(pt, unit)
+    if ping_binding == "alt_left" and terminal.IsKeyPressed(const.vkAlt) and can_ping(self, pt) then
+      send_ping(self); return "break"
+    end
+    return old_left(self, pt, unit)
+  end
+  function CombatInterface:OnLButtonDoubleClick(pt, unit)
+    if ping_binding == "alt_left" and terminal.IsKeyPressed(const.vkAlt) and can_ping(self, pt) then
+      send_ping(self); return "break"
+    end
+    if old_double then return old_double(self, pt, unit) end
+  end
+  diagnostic("OMERTA_COOP_HUD_PING scale=" .. hud_scale .. " binding=" .. ping_binding)
 end

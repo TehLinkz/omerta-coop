@@ -8,7 +8,9 @@ def options(q):
     for k in ('maxed','items','wasd'):
         if k in opts and opts[k] not in ('0','1'):raise ValueError('Invalid '+k)
     if 'turn_seconds' in opts and not 0<=int(opts['turn_seconds'])<=3600:raise ValueError('Timer must be 0-3600 seconds')
-    return {k:str(v) for k,v in opts.items() if k in ('maxed','items','wasd','turn_seconds')}
+    if 'hud_scale' in opts and str(opts['hud_scale']) not in ('100','150','200','300'):raise ValueError('HUD scale must be 100, 150, 200 or 300 percent')
+    if 'ping' in opts and opts['ping'] not in ('off','middle','alt_left'):raise ValueError('Invalid ping binding')
+    return {k:str(v) for k,v in opts.items() if k in ('maxed','items','wasd','turn_seconds','hud_scale','ping')}
 
 def dispatch(q):
     if q['action']=='status':
@@ -24,7 +26,7 @@ def dispatch(q):
         return {'games':[str(p) for p in games], 'game':str(game) if game else '',
                 'name':cfg.get('name','Player'),'difficulty':cfg.get('difficulty','normal'),
                 'role':saved.get('role','Host'),'peer':saved.get('peer',''),
-                'options':{k:cfg.get(k,default) for k,default in [('maxed','1'),('items',cfg.get('maxed','1')),('wasd','1'),('turn_seconds','0')]},
+                'options':{k:cfg.get(k,default) for k,default in [('maxed','1'),('items',cfg.get('maxed','1')),('wasd','1'),('turn_seconds','0'),('hud_scale','100'),('ping','middle')]},
                 'skip_launcher':saved.get('skip_launcher',True),'adapters':adapters,
                 'host':m.read_json(m.ROOT/'host-settings.json'),'client_host':cfg.get('host',''),
                 'transport':saved.get('transport','Steam')}

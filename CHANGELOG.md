@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.5
+
+Local HUD multipliers, shared five-second combat map pings with configurable binding/off, validated and rate-limited helper messages, and updated optional-patch reset behavior. HUD enlargement confirmed in-game; two-PC visual ping validation remains pending.
+
 ## v1.4
 
 Steam direct/relay connection, unified Steam-first launcher, LAN/VPN fallback tab, independent character/weapon controls, patch disable/restore buttons, timer and difficulty controls, and direct game launch. See RELEASE-NOTES.md.

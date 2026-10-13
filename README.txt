@@ -1,9 +1,23 @@
-OMERTA CO-OP v1.4 - STEAM WITH LAN / VPN FALLBACK
+OMERTA CO-OP v1.5 - STEAM WITH LAN / VPN FALLBACK
 
 This integrates the existing co-op helper with SteamNetworking under Omerta's
 real app ID (208520). The earlier two-PC probe confirmed Steam relay delivery.
 Steam connection has been reported working by the tester. A full completed
 mission is still not confirmed. LAN/Radmin is available in the fallback tab.
+
+HUD AND MAP PINGS
+- Patches and options: HUD size Default, 150%, 200%, or 300% of the native size.
+  This changes in-game UI only. Larger sizes may overlap on smaller screens.
+- Shared map ping: Middle mouse click (default), Alt + left click, or Off.
+- In a co-op combat map, click the ground to show a marker for five seconds.
+  Pings mark a fixed location, not a tracked enemy. They do not issue orders.
+  One marker per player; new pings replace the old one. Cooldown: 0.75 seconds.
+- Off disables sending/display locally. HUD size can differ between players.
+- Both PCs and the host helper should use v1.5. Use Steam or LAN/VPN.
+- HUD buttons, chat, camera locks and single-player/city maps do not send pings.
+- Larger HUD confirmed in-game. Native marker appearance on two PCs is unconfirmed.
+- Close the game and connection, change options, then Apply selected patches.
+- Disable optional patches resets HUD size to Default and turns pings Off.
 
 SETUP ON BOTH PCs
 1. Extract the entire ZIP to a new, permanent folder. Keep support and
@@ -104,7 +118,7 @@ VALIDATION
 The local transport test passed byte-for-byte transfer of 1,048,577 bytes in
 each direction through real loopback TCP sockets with a simulated Steam
 transport, including reconnect, stale-session rejection and role validation.
-The 13 co-op protocol regression tests pass. Setup tests verify role ports,
+The 17 co-op protocol regression tests pass. Setup tests verify role ports,
 profile/options preservation and the pre-Steam INI backup.
 These tests do not prove native Steam gameplay or combat synchronization.
 

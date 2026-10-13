@@ -17,7 +17,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parent
 EXE = ROOT / 'runtime' / 'OmertaCoopServer.exe'
 LOCAL = ROOT / 'local-settings.json'
-DEFAULTS = {'maxed': '1', 'turn_seconds': '0', 'wasd': '1', 'difficulty': 'normal'}
+DEFAULTS = {'maxed': '1', 'turn_seconds': '0', 'wasd': '1', 'difficulty': 'normal', 'hud_scale': '100', 'ping': 'middle'}
 
 def read_json(path, default=None):
     return json.loads(path.read_text(encoding='utf-8-sig')) if path.exists() else (default or {})
@@ -123,7 +123,11 @@ def configure_client(game, host, token, name, options=None):
                 raise ValueError('Timer must be 0-3600 seconds')
             if key == 'difficulty' and value not in ('easy','normal','hard','insane'):
                 raise ValueError('Invalid co-op difficulty')
-            if key not in ('turn_seconds','difficulty') and str(value) not in ('0', '1'):
+            if key == 'hud_scale' and str(value) not in ('100','150','200','300'):
+                raise ValueError('HUD scale must be 100, 150, 200 or 300 percent')
+            if key == 'ping' and value not in ('off','middle','alt_left'):
+                raise ValueError('Invalid ping binding')
+            if key not in ('turn_seconds','difficulty','hud_scale','ping') and str(value) not in ('0', '1'):
                 raise ValueError('Invalid game option')
             data[key] = str(value)
     write_ini(ROOT / 'OmertaCoop.ini', data)

@@ -30,6 +30,8 @@ class Peer:
         self.queue = None
         self.missions = set(BASE_MISSIONS)
         self.challenges = {}
+        self.features = set()
+        self.last_map_ping = float('-inf')
 
     async def send(self, name, *args):
         self.writer.write(rpc_packet(name, *args))
@@ -144,10 +146,13 @@ class Server:
     async def call(self, p, method, a):
         if method == 'rpcCoopHello':
             if p.id: return [b'param']
-            if len(a) not in (5,6) or a[4] != 2:
+            if len(a) not in (5,6,7) or a[4] != 2:
                 return [b'Update both PCs to the difficulty-enabled patch']
             token, profile, name, version, patch_version = a[:5]
-            available = a[5] if len(a) == 6 else {m: True for m in BASE_MISSIONS}
+            available = a[5] if len(a) >= 6 else {m: True for m in BASE_MISSIONS}
+            features = a[6] if len(a) == 7 else {}
+            if not isinstance(features, dict) or any(k != b'map_ping_v1' or v is not True for k, v in features.items()):
+                return [b'param']
             if not isinstance(available, dict) or len(available) > len(MISSIONS) or any(m not in MISSIONS or enabled is not True for m, enabled in available.items()):
                 return [b'param']
             if not isinstance(token, bytes) or (self.token and not hmac.compare_digest(token, self.token)):
@@ -162,6 +167,7 @@ class Server:
             p.id, self.next_id = self.next_id, self.next_id + 1
             p.profile, p.name, p.version = profile_hash, name, version
             p.missions = set(available)
+            p.features = set(features)
             self.peers[p.id] = p
             LOG.info('Player %s connected, game network version %s', p.id, version)
             return [False, p.id]
@@ -279,6 +285,24 @@ class Server:
             return [False, match.players.index(p) + 1]
         if method == 'rpcLeaveGame':
             await self.leave(p)
+            return [False]
+        if method == 'rpcCoopMapPing':
+            # UI-only, never enters deterministic game events or the pre-join queue.
+            if len(a) != 4 or any(type(v) is not int for v in a):
+                return [b'param']
+            game, x, y, z = a
+            match = p.match
+            if not match or match.finished or game != match.id or p not in match.joined or b'map_ping_v1' not in p.features:
+                return [b'failed']
+            if not (0 <= x <= 10000000 and 0 <= y <= 10000000 and -1000000 <= z <= 1000000):
+                return [b'param']
+            now = time.monotonic()
+            if now - p.last_map_ping < 0.75:
+                return [b'rate limited']
+            p.last_map_ping = now
+            for target in match.players:
+                if target in match.joined and b'map_ping_v1' in target.features:
+                    await target.send('rpcCoopMapPing', match.id, match.players.index(p) + 1, x, y, z)
             return [False]
         if method in ('rpcSyncPlayersData', 'rpcStartGame', 'rpcChangeLoadingStatus', 'rpcMissingMission'):
             await self.relay(p, method, a)

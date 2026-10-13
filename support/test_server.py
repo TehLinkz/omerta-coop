@@ -65,11 +65,13 @@ class RelayTests(unittest.IsolatedAsyncioTestCase):
         self.port = self.listener.sockets[0].getsockname()[1]
         self.clients = []
 
-    async def client(self, profile, name=b'Player', token=TOKEN, missions=None):
+    async def client(self, profile, name=b'Player', token=TOKEN, missions=None, features=None):
         reader, writer = await asyncio.open_connection('127.0.0.1', self.port)
         c = Client(reader, writer)
         self.clients.append(c)
         args = [] if missions is None else [{m:True for m in missions}]
+        if features is not None:
+            args = [{m:True for m in (missions if missions is not None else BASE_MISSIONS)}, features]
         result = await c.call('rpcCoopHello', token, profile, name, 3, 2, *args)
         return c, result
 
@@ -89,6 +91,54 @@ class RelayTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result[0], False)
         c, result = await self.client('profile-0001')
         self.assertEqual(result, [b'full'])
+
+    async def ping_pair(self, legacy=False):
+        c1, _ = await self.client('ping-player-1', features={b'map_ping_v1':True})
+        c2, _ = await self.client('ping-player-2', features=None if legacy else {b'map_ping_v1':True})
+        await c1.call('rpcStartMatch', b'Coop_BankHeist', True)
+        await c2.call('rpcStartMatch', b'Coop_BankHeist', True)
+        game = (await c1.event('rpcChallengeAccepted'))[0]
+        await c2.event('rpcChallengeAccepted')
+        await c1.call('rpcJoinGame', 'Gangs', game)
+        await c2.call('rpcJoinGame', 'Gangs', game)
+        return c1, c2, game
+
+    async def test_map_ping_reaches_both_players_and_not_game_events(self):
+        c1,c2,game = await self.ping_pair()
+        self.assertEqual(await c1.call('rpcCoopMapPing',game,12345,67890,0),[False])
+        expected = [game,1,12345,67890,0]
+        self.assertEqual(await c1.event('rpcCoopMapPing'),expected)
+        self.assertEqual(await c2.event('rpcCoopMapPing'),expected)
+        self.assertEqual(await c2.call('rpcCoopMapPing',game,200,300,-5),[False])
+        self.assertEqual((await c1.event('rpcCoopMapPing'))[1],2)
+        self.assertFalse(any(e[0]=='rpcEvent' for e in c1.events+c2.events))
+
+    async def test_map_ping_validates_match_coordinates_and_cooldown(self):
+        c1,c2,game = await self.ping_pair()
+        for coords in [(True,2,3),(-1,2,3),(10000001,2,3),(1,2,1000001),(b'x',2,3)]:
+            self.assertEqual(await c1.call('rpcCoopMapPing',game,*coords),[b'param'])
+        self.assertEqual(await c1.call('rpcCoopMapPing',game+1,1,2,3),[b'failed'])
+        self.assertEqual(await c1.call('rpcCoopMapPing',game,1,2,3),[False])
+        self.assertEqual(await c1.call('rpcCoopMapPing',game,1,2,3),[b'rate limited'])
+        await c1.call('rpcLeaveGame')
+        self.assertEqual(await c1.call('rpcCoopMapPing',game,1,2,3),[b'failed'])
+
+    async def test_map_ping_never_sends_unknown_rpc_to_legacy_client(self):
+        c1,c2,game = await self.ping_pair(legacy=True)
+        self.assertEqual(await c1.call('rpcCoopMapPing',game,10,20,30),[False])
+        await c2.call('rpcPing')
+        self.assertFalse(any(e[0]=='rpcCoopMapPing' for e in c2.events))
+        self.assertEqual(await c2.call('rpcCoopMapPing',game,10,20,30),[b'failed'])
+
+    async def test_map_ping_not_queued_for_loading_partner(self):
+        c1,c2,game = await self.ping_pair()
+        peer2 = list(self.instance.peers.values())[1]
+        peer2.match.joined.remove(peer2)
+        self.assertEqual(await c1.call('rpcCoopMapPing',game,10,20,30),[False])
+        self.assertEqual(peer2.match.pending[peer2],[])
+        await c2.call('rpcJoinGame','Gangs',game)
+        await c2.call('rpcPing')
+        self.assertFalse(any(e[0]=='rpcCoopMapPing' for e in c2.events))
 
     async def test_no_token_host_accepts_new_and_legacy_clients(self):
         self.instance.token = b''

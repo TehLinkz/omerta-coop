@@ -1,4 +1,4 @@
-# Omerta Co-op v1.4
+# Omerta Co-op v1.5
 
 A community co-op restoration launcher for **Omerta: City of Gangsters** on Windows. Connect through Steam, with LAN, Radmin and ZeroTier as fallbacks. No separate Python installation is needed.
 
@@ -12,24 +12,26 @@ A community co-op restoration launcher for **Omerta: City of Gangsters** on Wind
 - One launcher with Steam, Patches and options, and LAN / Radmin fallback tabs.
 - Detection across multiple Steam libraries, manual folder selection and player names.
 - Independent character/level 12/default-perk and weapon unlock options.
+- In-game HUD size: Default, 150%, 200% or 300% of the native size.
+- Shared five-second map pings using middle-click or Alt + left-click.
 - Optional WASD alongside arrows, Kalypso launcher skip, and 1920x1080 windowed launch.
 - Adjustable round timer, including unlimited time, and host-controlled bot difficulty.
 - Apply settings, disable optional patches, or restore the original game Lua archive.
 
-Steam IDs are exchanged manually. Steam friend invites/lobbies, map pings, HD textures and translation packs are not included.
+Steam IDs are exchanged manually. Steam friend invites/lobbies, HD textures and translation packs are not included.
 
 ## Requirements
 
 - Windows 10/11 64-bit with .NET Framework 4.x.
 - An installed Steam copy of Omerta on each PC, with separate Steam accounts/game ownership.
 - Steam running online for Steam mode.
-- Both players on v1.4 with matching timer settings and compatible installed DLC.
+- Both players on v1.5 with matching timer settings and compatible installed DLC.
 
 The patcher supports the verified Steam Lua archive used during development and refuses unknown archives. No original game archives or Steam DLL are distributed; the launcher loads the installed game's Steam library.
 
 ## Steam setup: both players
 
-1. Download **Omerta-Coop-v1.4.zip** from Releases and extract the entire ZIP into a permanent writable folder. Keep `support` and `steam_appid.txt` beside `OmertaSteamCoop.exe`.
+1. Download **Omerta-Coop-v1.5.zip** from Releases and extract the entire ZIP into a permanent writable folder. Keep `support` and `steam_appid.txt` beside `OmertaSteamCoop.exe`.
 2. Close Omerta and any old launcher/helper. Start Steam and open **OmertaSteamCoop.exe**.
 3. Check the detected game folder and enter your player name. One player selects **Host**, the other **Join**.
 4. In **Patches and options**, choose unlocks, camera controls, timer and launcher behavior. The host chooses difficulty.
@@ -52,14 +54,24 @@ Close the game and stop the Steam connection before changing patches. Changing a
 | All available weapons | Independent weapon unlocks. Installed DLC availability applies. |
 | WASD + arrows | Adds WASD movement; arrows remain available. Alt+W retains Defensive Behavior. Chat focus and camera locks suspend movement. |
 | Skip Kalypso launcher | Skips the launcher during Play; disable to use its normal Start button. |
+| In-game HUD size | Default, 150%, 200% or 300% of native size. Local setting; large sizes may overlap on smaller screens. |
+| Shared map ping | Middle mouse click, Alt + left click, or Off. Five-second fixed-location markers in co-op combat. |
 | Round timer | 0 = unlimited; 60 = original; 300 = five minutes; maximum 3600. Both players must match. |
 | Bot difficulty | Easy, Normal, Hard or Insane; the host's rules apply to both players for new matches. |
-| Disable optional patches | Turns off unlocks, WASD and launcher skip; restores timer 60 and difficulty Normal. Co-op stays installed. |
+| Disable optional patches | Turns off unlocks, WASD, launcher skip and pings; restores HUD Default, timer 60 and difficulty Normal. Co-op stays installed. |
 | Restore original game | Restores verified original Lua.hpk, removing the co-op Lua patch. Profiles and host saves remain. |
 
 **Turning unlocks off does not erase saved levels, weapons or perks.** It stops future grants and perk rebuilding. To recover previous progression, restore your own pre-unlock host backup. Campaign saves are not edited by the multiplayer unlock patch.
 
 Difficulty changes enemy levels/stats, not AI decision-making: Easy targets three levels below normal (minimum 1); Normal uses original scaling; Hard adds 1 Toughness/Guts; Insane adds 2 Toughness/Guts and 1 Muscle/Finesse/Cunning/Smarts. Stat bonuses cap at 10.
+
+## Shared map pings
+
+With both PCs and the helper updated to v1.5, middle-click the ground during a co-op combat mission to draw a marker on both screens. Choose Alt + left-click or Off under Patches and options if preferred.
+
+Each marker lasts five seconds. Each player has one marker; a new ping replaces it, with a 0.75-second cooldown. It marks a fixed location, not a tracked enemy, and does not issue orders or move the camera. Off disables sending and displaying pings locally. HUD clicks, chat focus and camera locks do not send pings. Single-player and city maps do not send shared pings.
+
+Steam and LAN/VPN use the same message. Automated relay tests pass; a two-PC visual marker test is still pending.
 
 ## LAN / Radmin fallback
 
@@ -82,10 +94,10 @@ Both players must already belong to the same reachable LAN or VPN. The patch doe
 
 Quick Match Random Map selects among missions available to both players. This restores existing co-op missions; it does not add campaign co-op or new maps.
 
-## Upgrade from v1.0-v1.3 and preserve saves
+## Upgrade from v1.0-v1.4 and preserve saves
 
 1. Close the game and stop/close old launchers and helpers on both PCs.
-2. Extract v1.4 to a **new folder**. Keep the old folder as a backup.
+2. Extract v1.5 to a **new folder**. Keep the old folder as a backup.
 3. To keep existing gangs, copy the old host's `support/state` folder into the new host's `support/state` while both helpers are stopped. Saves are not automatically imported from another kit folder.
 4. Open OmertaSteamCoop.exe, review options and follow Steam or fallback setup. Install on both PCs.
 
@@ -105,7 +117,7 @@ The original Lua backup is `Packs/Lua.hpk.omerta-coop-original`; first Steam set
 
 ## Validation and credits
 
-Automated checks cover the local tunnel, co-op protocol and setup. The tunnel test transfers 1,048,577 bytes each way through real loopback TCP with simulated Steam transport. These checks do not prove completed native combat. Camera direction/speed was manually checked in sandbox city view.
+Automated checks cover the local tunnel, co-op protocol and setup. The tunnel test transfers 1,048,577 bytes each way through real loopback TCP with simulated Steam transport. These checks do not prove completed native combat. Camera direction/speed was manually checked in sandbox city view. The larger HUD was confirmed in-game by the tester. Ping routing, validation and expiry pass automated checks; native marker appearance on both PCs remains unconfirmed.
 
 - Source is under `support`; detailed offline instructions are in README.txt.
 - [HPK v0.3.12](https://github.com/nickelc/hpk), GPLv3: `support/tools/LICENSE`.
